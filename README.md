@@ -2,7 +2,7 @@
 
 Tools to support MITRE's methodology for crowd-sourced curation.
 
-This package is an initial attempt at distributing the scripts and
+This package is an initial distribution of the scripts and
 utilities used in MITRE's Hybrid Curation experiments on Amazon
 Mechanical Turk, asdescribed in the following papers:
 
