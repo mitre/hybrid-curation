@@ -11,7 +11,7 @@ Mechanical Turk, as described in the following papers:
 
 The following are the main scripts MITRE has used for the hybrid
 curation methodology. Each is briefly discussed in Appendix A of the
-white paper (also available separately in the [https:/mitre/hybrid-curation/blob/master/doc](hybrid-curation/doc directory).
+white paper (also available separately in the [hybrid-curation/doc directory](https:/mitre/hybrid-curation/blob/master/doc]).
 
 	simple-merge.py 
 	new-make-items.py 
