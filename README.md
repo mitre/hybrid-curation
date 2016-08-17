@@ -11,7 +11,7 @@ Mechanical Turk, as described in the following papers:
 
 The following are the main scripts MITRE has used for the hybrid
 curation methodology. Each is briefly discussed in Appendix A of the
-white paper.
+white paper (also available separately in the [https:/mitre/hybrid-curation/blob/master/doc](hybrid-curation/doc directory).
 
 	simple-merge.py 
 	new-make-items.py 
@@ -21,7 +21,7 @@ white paper.
 	simple-score.py
 
 If you want to limit your HITs to those Turkers who have passed a
-qualifier, these scripts may be useful. Note that upload.qual.py
+qualifier, these scripts may be useful. Note that upload-qual.py
 requires the boto package to be installed.
 	
 	make-qual.py
