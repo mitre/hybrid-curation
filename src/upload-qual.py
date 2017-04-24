@@ -122,22 +122,25 @@ def constructQual (conn, questions,
                                     "maxScore" : maxScore }
     # print >>sys.stderr, "=====\n".join(("", qf.get_as_xml(), keyXML, ""))
     return qf, keyXML
-  
-def postQual (conn, name, qObject, keyXML,
-              description=None,
-              duration=None, retake=0, verbose=0):
-    """Post the qual to MTurk using boto"""
-    duration = duration or 20*len(questions)
-    description = description or name
+
+def findExisting (conn, name):
     # Turns out search is just a loose keyword search
     existing = conn.search_qualification_types(name)
     existing = [e for e in existing if e.Name.lower() == name.lower()]
     if existing and len(existing) == 1:
         # print >>sys.stderr, existing[0].__dict__
         existing = existing[0].QualificationTypeId
-        if verbose:
-            print >>sys.stderr, "Found existing qual ..."
-        return conn.update_qualification_type(existing,
+        print >>sys.stderr, "Found existing qual %s" % existing
+        return existing
+
+def postQual (conn, qualid, name, qObject, keyXML,
+              description=None,
+              duration=None, retake=0, verbose=0):
+    """Post the qual to MTurk using boto"""
+    duration = duration or 20*len(questions)
+    description = description or name
+    if qualid:
+        return conn.update_qualification_type(qualid,
                                               description=description, status="Active",
                                               test=qObject, answer_key=keyXML,
                                               test_duration=duration,                                 
@@ -213,11 +216,11 @@ def plaintextify (txt):
     return txt    
 
 def parseDuration (dur):
-    """Parse expressions like 60s 24h 31d"""
+    """Parse expressions like 60s, 24h, 31d"""
     num = dur
     mult = 1
-    if dur[-1].lower() in "smhd":
-        mult = dict(s=1, m=60, h=60*60, d=24*60*60)[dur[-1].lower()]
+    if dur[-1].lower() in "smhdw":
+        mult = dict(s=1, m=60, h=60*60, d=24*60*60, w=7*24*60*60)[dur[-1].lower()]
         num = dur[:-1]
     # print >>sys.stderr, "%r %r" % (num, mult)
     try:
@@ -235,8 +238,8 @@ verbose = 0
 optParser = optparse.OptionParser(usage="%prog [options] [QAFILE]", version="%prog 0.3")
 
 optParser.add_option("-v", "--verbose", action="count", help="More verbose output (cumulative)")
-optParser.add_option("--name", help="MTurk-internal identifier for qualifier")
-optParser.add_option("--title", help="Qualifier title for Turkers' consumption")
+optParser.add_option("--qualid", help="MTurk-internal identifier for qualifier")
+optParser.add_option("--name", "--title", help="Qualifier title for Turkers' consumption")
 optParser.add_option("--front", "--intro", metavar="FILE", help="Instructions, etc. for top of qual. Default is first paragraph of plaintxt QAFILE")
 optParser.add_option("--back", "--outro", metavar="FILE", help="Final remarks for bottom of qual")
 optParser.add_option("--description", metavar="TEXT", help="Brief description of qual.  Default is frontmatter, stripped of HTML")
@@ -249,12 +252,13 @@ optParser.add_option("--accesskey", "--access", metavar="KEY", help="AWS access 
 optParser.add_option("--secretkey", "--secret", metavar="KEY", help="AWS secret key (default from ~/.boto)")
 optParser.add_option("--sandbox", action="store_true", help="Create qual on sandbox site")
 
-optParser.add_option("--randomize", "--shuffle", action="store_true", help="Shuffle answers")
-optParser.add_option("--sort", action="store_true", help="""Sort answers (with magic for Yes/No)""")
+optParser.add_option("--answershuffle", action="store_true", help="Shuffle answers")
+optParser.add_option("--questionshuffle", action="store_true", help="Shuffle questions")
+optParser.add_option("--answersort", "--sort", action="store_true", help="""Sort answers (with magic for Yes/No)""")
 optParser.add_option("--json", action="store_true", help="QAFILE is JSON rather than simple QA format")
 
 options, input = optParser.parse_args()
-assert(options.name or options.title)
+assert options.qualid or options.name
 input = fileinput.input(input)
 verbose = options.verbose
 
@@ -284,14 +288,20 @@ if options.front:
     with open(options.front) as f:
         frontMatter = "".join(f)
 
-if options.randomize:
+if options.questionshuffle:
+    print >>sys.stderr, "Shuffling QUESTIONS ..."
+    random.shuffle(questions)
+
+if options.answershuffle:
+    print >>sys.stderr, "Shuffling answers ..."
     for q in questions:
         random.shuffle(q["answers"])
-elif options.sort:
+elif options.answersort:
+    print >>sys.stderr, "Sorting answers ..."
     for q in questions:
         q["answers"] = orderAnswers(q["answers"])
 
-description = options.description or frontMatter and plaintextify(frontMatter) or options.title
+description = options.description or frontMatter and plaintextify(frontMatter) or options.name
 
 if options.back:
     with open(options.back) as f:
@@ -306,12 +316,12 @@ if verbose:
     # print >>sys.stderr, "Questions:", questions[:2] # [q.encode("utf8") for q in questions[:2]]
 
 questions, key = constructQual(conn, questions,
-                               title=options.title or options.name,
+                               title=options.name,
                                front=frontMatter,
                                back=backMatter)
 
 if verbose > 1:
-    print >>sys.stderr, questions
+    print >>sys.stderr, questions, "(%d)" % len(questions)
     print >>sys.stderr, key
 
 duration = parseDuration(options.duration)
@@ -326,14 +336,16 @@ else:
 if verbose:
     print >>sys.stderr, "Duration is %s, retake is %s" % (duration, retake)
 
-qual = postQual(conn, options.name or options.title, questions, key,
+qualid = options.qualid or findExisting(conn, options.name)
+qual = postQual(conn, qualid, options.name, questions, key,
                 description=description,
                 duration=duration,
                 retake=retake,
                 verbose=verbose)
-if verbose:
-    print >>sys.stderr, "Created/updated qual %s %s" % (qual[0].QualificationTypeId,
-                                                        "(on the sandbox)" if options.sandbox else "(on the live site)")
+
+print >>sys.stderr, "%s qual %s %s" % ("Updated" if qualid else "Created",
+                                       qual[0].QualificationTypeId,
+                                       "(on the sandbox)" if options.sandbox else "(on the live site)")
 
 ######################################################################
 
