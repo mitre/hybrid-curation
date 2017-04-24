@@ -2,16 +2,16 @@
 
 Tools to support MITRE's methodology for crowd-sourced curation.
 
-This package is an initial attempt at distributing the scripts and
+This package is an initial distribution of the scripts and
 utilities used in MITRE's Hybrid Curation experiments on Amazon
-Mechanical Turk, asdescribed in the following papers:
+Mechanical Turk, as described in the following papers:
 
   https://database.oxfordjournals.org/content/2014/bau094.abstract
   https://database.oxfordjournals.org/content/2015/bav016.abstract
 
 The following are the main scripts MITRE has used for the hybrid
 curation methodology. Each is briefly discussed in Appendix A of the
-white paper.
+white paper (also available separately in the hybrid-curation/doc directory).
 
 	simple-merge.py 
 	new-make-items.py 
@@ -21,7 +21,7 @@ white paper.
 	simple-score.py
 
 If you want to limit your HITs to those Turkers who have passed a
-qualifier, these scripts may be useful. Note that upload.qual.py
+qualifier, these scripts may be useful. Note that upload-qual.py
 requires the boto package to be installed.
 	
 	make-qual.py
