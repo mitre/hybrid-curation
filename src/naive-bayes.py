@@ -89,8 +89,8 @@ def readKeys (file, yes="yes"):
     nTotal = nKept = 0
     for item in csv.DictReader(maybeOpen(file, "r", None), dialect="excel-tab", fieldnames="itemID label".split()):
         # assert item["label"] in ("yes", "no")
-        if keys.get(item["itemID"], None) is not None:
-            print >>sys.stderr, "Duplicate entries in key for", item["itemID"]
+        if item["itemID"] in keys and keys[item["itemID"]] != item["label"]:
+            print >>sys.stderr, "Conflicting entries in key for %s: %r -> %r" % (item["itemID"], keys[item["itemID"]], item["label"])
         k = item["label"].lower()
         k = normalizeAnswer(k, yes=yes)
         keys[item["itemID"]] = k
@@ -114,7 +114,7 @@ def readResponses (file, itemref, answerref, yes="yes", missing=None):
     for response in readJSON(file):
         n += 1
         # print  >>sys.stderr, n, r
-        r = normalizeAnswer(response[answerref], yes=yes, missing=missing)
+        r = normalizeAnswer(response.get(answerref), yes=yes, missing=missing)
         responses.append((response["WorkerId"], response[itemref], r))
     return responses
 
@@ -124,10 +124,17 @@ def readResponses (file, itemref, answerref, yes="yes", missing=None):
 
 def countCoocurrences (reference, responses):
     counts = collections.defaultdict(lambda : collections.defaultdict(int))
+    seen = set()
+    dups = 0
     for workerID, itemID, answer in responses:
         if reference.has_key(itemID):
+            if (workerID, itemID) in seen:
+                dups += 1
+            seen.add((workerID, itemID))
             ref = reference[itemID]
             counts[workerID][(answer, ref)] += 1
+    if dups:
+        print >>sys.stderr, "%d worker-item duplicates" % dups
     return counts
 
 class logOddsNB:
@@ -141,7 +148,7 @@ class logOddsNB:
             # Contingency table
             a, b, c, d = (counts[("yes", "yes")], counts[("yes", "no")],
                           counts[("no", "yes")], counts[("no", "no")])
-            # Simplistic additive smoothing
+            # Simplistic Laplace smoothing
             a += 1.0
             b += 1.0
             c += 1.0
@@ -194,6 +201,7 @@ optparser.add_option("--yes", metavar="VALUE", default="yes",
                      help='''Interpret VALUE as "yes" label, all others as "no" (default %default)''')
 optparser.add_option("--missing", metavar="VALUE", default=None, help="Use VALUE for missing answers (default is to skip them)")
 optparser.add_option("--logprior", metavar="LOGIT",type=float, default=0.0, help="Use LOGIT as the prior in the Naive Bayes summation (default %default))")
+optparser.add_option("--empirical", action="store_true", help="Compute prior from the data (gasp)")
 
 # optParser.add_option("--db", help = "Database file")
 
@@ -232,7 +240,13 @@ print >>sys.stderr, '''Read %d responses (%d items, %d "yes", %d empty)''' % (le
                                                                               sum(1 for (w, i, r) in responses if r == None))
 
 nb = logOddsNB(keys, responses)
-nbAggregate = nb.aggregateResponses(responses, logPrior=options.logprior)
+logPrior = options.logprior
+if options.empirical:
+    logPrior = (math.log(sum(1 for (w, i, r) in responses if r =="yes"))
+                - math.log(sum(1 for (w, i, r) in responses if r != "yes")))
+    print >>sys.stderr, "Using empirical log-odds from responses - %.4f (%.3f)" % (logPrior, math.exp(logPrior))
+nbAggregate = nb.aggregateResponses(responses, logPrior=logPrior)
+nbAggregate.sort(key=lambda (i,a,s): s, reverse=True)
 for itemID, answer, score in nbAggregate:
     print >>sys.stdout, json.dumps({"WorkerId": "NaiveBayes", options.itemref: itemID,
                                     options.answerref: answer, "Answer.score": score},
