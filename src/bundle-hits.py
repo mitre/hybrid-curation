@@ -212,7 +212,8 @@ class itemBundler:
                 bundleList = []
                 if not items:
                     break
-        print >>sys.stderr, "Combined %d items with %d controls* into %d bundles" % (itemsUsed, controlsUsed, nBundles)
+        print >>sys.stderr, "Combined %d items with %d controls* into %d %d-bundles" % (itemsUsed, controlsUsed, nBundles, self.nBundle)
+        assert not items
         assert not bundleList
 
 def computeGoldRate (goldRate, n):
@@ -228,12 +229,11 @@ def computeGoldRate (goldRate, n):
     print >>sys.stderr, "Gold rate = %.2f" % goldRate
     return goldRate
 
+import collections
 def separateGold (allItems, goldIDs):
     """For when gold file just has itemID"""
     allItems = list(allItems)
     goldIDs = set(i.lower() for i in goldIDs)
-#     for item in gold:
-#       goldIDs.add(item["itemID"])
     goldItems = []
     strawItems = []
     for item in allItems:
@@ -243,6 +243,7 @@ def separateGold (allItems, goldIDs):
         else:
             strawItems.append(item)
     print >>sys.stderr, "%d gold found, %d test items (%d)" % (len(goldItems), len(strawItems), len(allItems))
+    # print >>sys.stderr, "Repeated gold: %s" % (list(i for i,c in collections.Counter(i["itemID"].lower() for i in goldItems).iteritems() if c > 1), )
     missingGold = goldIDs.difference([item["itemID"].lower() for item in goldItems])
     if missingGold:
         print >>sys.stderr, "%d gold IDs not found (e.g. %s)" % (len(missingGold), " ".join(list(missingGold)[:3]))
