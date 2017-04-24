@@ -40,8 +40,9 @@ def readReferences (filename):
     references = {}
     nIgnored = 0
     try:
+        i = 0
         with open(filename, "rU") as f:
-            for line in f:
+            for i, line in enumerate(f):
                 line = line.strip()
                 line = line.split()
                 if len(line) > 1:
@@ -50,7 +51,7 @@ def readReferences (filename):
                 else:
                     nIgnored += 1
     except Exception as e:
-        print >>sys.stderr, "Error reading docs file %r" % docsFile
+        print >>sys.stderr, "Error reading docs file %r, line %d" % (filename, i)
         raise
     if nIgnored:
         print >>sys.stderr, "Ignored %d odd (missing?) references" % nIgnored
@@ -115,6 +116,8 @@ class tabResponseReader:
 import math
 
 def median (data):
+    if not data:
+        return None
     data = sorted(data)
     # print data
     l = len(data)
@@ -139,6 +142,7 @@ class simpleScorer:
         turkers = collections.defaultdict(lambda : collections.defaultdict(float))
         prAnswers = set(a.lower() for a in prAnswers)
         allDurations = []
+        adjustedDurations = []
 
         for item in self.responses:
             itemID = item[itemRef]
@@ -157,16 +161,29 @@ class simpleScorer:
                     overall["correct"] += 1
                     turkers[turkerID]["correct"] += 1
                 if ref in prAnswers:
+                    overall["recallDenominator"] += 1
                     turkers[turkerID]["recallDenominator"] += 1                
                 if response in prAnswers:
                     turkers[turkerID]["precisionDenominator"] += 1        
+                    overall["precisionDenominator"] += 1
                     if ref == response:
                         turkers[turkerID]["prNumerator"] += 1
-
+                        overall["prNumerator"] += 1
             turkers[turkerID]["totalItems"] += 1
-            dur = float(item.get("WorkTimeInSeconds", 0))
-            turkers[turkerID]["duration"] += dur
+            dur = float(item["WorkTimeInSeconds"])
+            aDur = item.get("AdjustedWorkTime", None)
+            if aDur is not None:
+                aDur = float(aDur)
+                turkers[turkerID]["duration"] += aDur
+                adjustedDurations.append(aDur)
+            else:
+                turkers[turkerID]["duration"] += dur
             allDurations.append(dur)
+
+        if adjustedDurations:
+            print >>sys.stderr, "Using adjusted HIT durations"
+            if len(allDurations) != len(adjustedDurations):
+                print >>sys.stderr, "***** Mix of raw and adjusted durations!!! *****"
                         
         for turkerID, scores in turkers.iteritems():
             scores["accuracy"] = (scores["correct"] + smoothing) / (scores["total"] + 1)
@@ -174,14 +191,21 @@ class simpleScorer:
         print "%20s %4d" % ("Total Turkers", len(turkers))
         print "%20s %s" % ("Avg response", self.prettyPrint([(overall["correct"], overall["total"])])   )
         print "%20s %s" % ("Avg Turker", self.prettyPrint([(s["correct"], s["total"]) for s in turkers.itervalues()]))
-        print "%20s %8.3f" % ("Median Turker",  median([s["correct"] / s["total"] for s in turkers.itervalues() if s["total"]]))
+        print "%20s %8.3f" % ("Median Turker",  median([s["correct"] / s["total"] for s in turkers.itervalues() if s["total"]]) or 0)
         print "%20s %s" % ("Avg Duration", self.prettyPrint([(s["duration"], s["totalItems"]) for s in turkers.itervalues()]))
-        print "%20s %8.3f" % ("Median Duration", median(allDurations))
+        print "%20s %8.3f (of %d)" % ("Median Duration", median(adjustedDurations or allDurations), len(adjustedDurations or allDurations))
+        # print "%20s %8.3f (of %d)" % ("Median Duration", median([s["duration"] / s["totalItems"] for s in turkers.itervalues() if s["total"]]), len(turkers))
+
         if prAnswers:
             print "%20s %s" % ("Avg Precision",
                                self.prettyPrint([(s["prNumerator"], s["precisionDenominator"]) for s in turkers.itervalues()]))
             print "%20s %s" % ("Avg Recall",
                                self.prettyPrint([(s["prNumerator"], s["recallDenominator"]) for s in turkers.itervalues()]))
+            print "%20s %s" % ("Overall Precision",
+                                self.prettyPrint([(overall["prNumerator"], overall["precisionDenominator"])])   )
+            print "%20s %s" % ("Overall Recall",
+                                self.prettyPrint([(overall["prNumerator"], overall["recallDenominator"])])   )
+
         print "%-20s  %-18s  %-18s  %-18s  %-9s  %-8s  %-8s" % ("======== Individual", "Smoothed accuracy", "Precision  ", "Recall  ", "F  ", "Duration", "Abstains")
         for turkerID in sorted(turkers, key=lambda t: (turkers[t]["accuracy"], turkers[t]["total"]), reverse=True):
             acc = self.prettyPrint([(turkers[turkerID]["correct"], turkers[turkerID]["total"])],
